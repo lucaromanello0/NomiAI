@@ -1,0 +1,19 @@
+# Core Google AI Development Kit dependencies
+google-adk
+google-genai
+
+# Web framework
+Flask>=2.0.0
+
+# ASGI/WSGI compatibility
+asgiref>=3.4.0
+
+# HTTP requests
+requests>=2.25.0
+
+# Standard library modules (included with Python)
+# typing - built-in since Python 3.5
+# functools - built-in
+# asyncio - built-in since Python 3.4
+# os - built-in
+# datetime - built-in
