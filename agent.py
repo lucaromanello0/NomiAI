@@ -515,7 +515,7 @@ class fmp():
         url = f"https://financialmodelingprep.com/api/v3/financial-statement-full-as-reported/{symbol}?period={period}"
         return self.make_req(url)
     
-    def get_financial_statement_list(self, symbol: str):
+    def get_financial_statement_list(self):
         """Get list of available financial statement symbols"""
         url = f"https://financialmodelingprep.com/api/v3/financial-statement-symbol-lists"
         return self.make_req(url)
@@ -5425,7 +5425,7 @@ class fmp():
         
         return self.make_req(url)
     
-    def get_technical_indicator_sma(self, symbol: str, period: int = 20, type: str = "line"):
+    def get_technical_indicator_sma(self, symbol: str, period: int = 20):
         """Get Simple Moving Average (SMA) technical indicator"""
         url = f"https://financialmodelingprep.com/api/v3/technical_indicator/daily/{symbol}?type=sma&period={period}"
         return self.make_req(url)
