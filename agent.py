@@ -1,67 +1,78 @@
+# Core imports for Google Agent Development Kit and AI functionality
 from google.adk.agents import Agent
 from google.genai import types
 from google.adk.planners import BuiltInPlanner
+
+# Standard library imports for HTTP requests and utilities
 import requests
-from google.adk.tools import agent_tool
-from google.adk.tools import google_search
 from typing import Optional
 import functools
 import asyncio
 import os
 from datetime import datetime
+
+# Google ADK tools and services
+from google.adk.tools import agent_tool
+from google.adk.tools import google_search
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
-from google.genai import types
+
+# Web framework imports for Flask application
 from flask import Flask, render_template, request, jsonify
 from asgiref.wsgi import WsgiToAsgi
 
-# Configure planner with thinking capabilities using BuiltInPlanner
+# Initialize planner with AI thinking capabilities for financial reasoning
 thinking_planner = BuiltInPlanner(
     thinking_config=types.ThinkingConfig(
-        include_thoughts=False,      # capture intermediate reasoning
-        thinking_budget=-1        # tokens allocated for planning
+        include_thoughts=False,      # Disable intermediate reasoning display
+        thinking_budget=-1           # Unlimited token budget for planning
     )
 )
 class fmp():
+    """Financial Modeling Prep API wrapper with built-in retry logic and logging"""
     def __init__(self, api_key: str):
+        """Initialize FMP API client with authentication key"""
         self.api_key = api_key
     
     def __getattribute__(self, name):
+        """Automatic logging wrapper for all API method calls"""
         attr = object.__getattribute__(self, name)
+        # Add logging to all public callable methods except core attributes
         if callable(attr) and not name.startswith('_') and name not in ['api_key', 'make_req']:
             def wrapper(*args, **kwargs):
+                # Log API call start with first argument (usually symbol/query)
                 print(f"🔍 FMP API Call: {name}() - Arguments: {args[0] if args else 'None'}")
                 result = attr(*args, **kwargs)
                 print(f"✅ FMP API Call: {name}() - Completed")
                 return result
-            
-            # Preserve the original method name and other attributes
+
+            # Preserve original method metadata for proper function introspection
             wrapper.__name__ = name
             wrapper.__doc__ = getattr(attr, '__doc__', None)
-            
-            # Preserve the original signature using functools.wraps
             wrapper = functools.wraps(attr)(wrapper)
-            
+
             return wrapper
         return attr
     
     def make_req(self, url: str):
+        """Execute HTTP request with automatic retry logic and error handling"""
         import time
         max_retries = 3
         retry_delay = 1
-        
+
         for attempt in range(max_retries):
             try:
-                # Add API key with proper separator
+                # Construct authenticated URL with proper query parameter separator
                 separator = "&" if "?" in url else "?"
                 req = requests.get(url + separator + "apikey=" + self.api_key, timeout=30)
+
                 if req.status_code == 200:
                     return req.json()
-                elif req.status_code == 429:  # Rate limited
+                elif req.status_code == 429:  # Handle rate limiting with exponential backoff
                     print(f"⚠️ Rate limited, waiting {retry_delay * (attempt + 1)} seconds...")
                     time.sleep(retry_delay * (attempt + 1))
                     continue
-                elif req.status_code >= 500:  # Server error
+                elif req.status_code >= 500:  # Retry on server errors
                     print(f"⚠️ Server error {req.status_code}, retrying in {retry_delay} seconds...")
                     time.sleep(retry_delay)
                     continue
@@ -76,7 +87,7 @@ class fmp():
             except requests.exceptions.RequestException as e:
                 print(f"❌ Request failed: {str(e)}")
                 return {"error": f"Request failed: {str(e)}"}
-        
+
         return {"error": "Max retries exceeded"}
 
     def search_general(self, query: str, limit: int = 50):
@@ -123,7 +134,7 @@ class fmp():
         url = f"https://financialmodelingprep.com/api/v3/profile/{symbol}"
         return self.make_req(url)
     
-    def search_stock_screener(self, market_cap_more_than: Optional[int] = None, market_cap_lower_than: Optional[int] = None, 
+    def search_stock_screener(self, market_cap_more_than: Optional[int] = None, market_cap_lower_than: Optional[int] = None,
                             price_more_than: Optional[float] = None, price_lower_than: Optional[float] = None,
                             beta_more_than: Optional[float] = None, beta_lower_than: Optional[float] = None,
                             volume_more_than: Optional[int] = None, volume_lower_than: Optional[int] = None,
@@ -131,10 +142,10 @@ class fmp():
                             is_etf: Optional[bool] = None, is_actively_trading: Optional[bool] = None,
                             sector: Optional[str] = None, industry: Optional[str] = None, country: Optional[str] = None,
                             exchange: Optional[str] = None, limit: int = 50):
-        """Advanced stock screener with multiple filter options"""
+        """Advanced stock screener with comprehensive filtering capabilities for investment research"""
         url = f"https://financialmodelingprep.com/api/v3/stock-screener?limit={limit}"
-        
-        # Add optional parameters
+
+        # Build query string with all provided filter parameters
         if market_cap_more_than is not None:
             url += f"&marketCapMoreThan={market_cap_more_than}"
         if market_cap_lower_than is not None:
@@ -167,10 +178,11 @@ class fmp():
             url += f"&country={country}"
         if exchange:
             url += f"&exchange={exchange}"
-            
+
         return self.make_req(url)
     
-    # ===== STOCK LIST SECTION =====
+    # ===== STOCK LISTS AND MARKET INDICES =====
+    # Methods for retrieving various stock lists, ETFs, and market index constituents
     
     def get_all_symbols(self):
         """Get all available symbols (stocks, ETFs, etc.)"""
@@ -260,7 +272,8 @@ class fmp():
         url = "https://financialmodelingprep.com/api/v4/standard_industrial_classification/list"
         return self.make_req(url)
     
-    # ===== COMPANY INFORMATION SECTION =====
+    # ===== COMPANY FUNDAMENTALS AND INFORMATION =====
+    # Methods for retrieving detailed company information, executive data, and corporate governance
     
     def get_executive_compensation(self, symbol: str):
         """Get executive compensation information for a company"""
@@ -362,7 +375,8 @@ class fmp():
         url = f"https://financialmodelingprep.com/api/v4/score?symbol={symbol}"
         return self.make_req(url)
     
-    # ===== QUOTE SECTION =====
+    # ===== REAL-TIME QUOTES AND PRICING =====
+    # Methods for retrieving current market prices and basic quote information
     
     def get_quote(self, symbol: str):
         """Get real-time quote with bid/ask prices, volume, and last trade price"""
@@ -417,7 +431,8 @@ class fmp():
         url = f"https://financialmodelingprep.com/api/v4/fail_to_deliver?symbol={symbol}"
         return self.make_req(url)
     
-    # ===== FOREX, CRYPTO & COMMODITIES QUOTES =====
+    # ===== ALTERNATIVE ASSET QUOTES =====
+    # Forex, cryptocurrency, and commodity price data
     
     def get_forex_quote(self, pair: Optional[str] = None):
         """Get forex currency exchange rates (specific pair or all pairs)"""
@@ -458,7 +473,8 @@ class fmp():
         url = "https://financialmodelingprep.com/api/v3/quotes/commodity"
         return self.make_req(url)
     
-    # ===== REAL-TIME PRICE DATA =====
+    # ===== REAL-TIME MARKET DATA =====
+    # Live streaming price data and market updates
     
     def get_real_time_price(self, symbol: str):
         """Get real-time price for a stock"""
@@ -478,7 +494,8 @@ class fmp():
             url = "https://financialmodelingprep.com/api/v3/market-hours"
         return self.make_req(url)
     
-    # ===== FINANCIAL STATEMENTS SECTION =====
+    # ===== FINANCIAL STATEMENTS AND REPORTING =====
+    # Income statements, balance sheets, cash flow statements, and related financial data
     
     def get_income_statement(self, symbol: str, period: str = "annual", limit: int = 50):
         """Get income statement data (annual or quarter)"""
@@ -535,7 +552,8 @@ class fmp():
         url = f"https://financialmodelingprep.com/api/v4/shares_float/all?symbol={symbol}"
         return self.make_req(url)
     
-    # ===== FINANCIAL GROWTH METRICS =====
+    # ===== GROWTH AND PERFORMANCE METRICS =====
+    # Financial growth rates and key performance indicators
     
     def get_income_statement_growth(self, symbol: str, period: str = "annual", limit: int = 50):
         """Get income statement growth rates"""
@@ -557,7 +575,8 @@ class fmp():
         url = f"https://financialmodelingprep.com/api/v3/financial-growth/{symbol}?period={period}&limit={limit}"
         return self.make_req(url)
     
-    # ===== FINANCIAL RATIOS & METRICS =====
+    # ===== FINANCIAL RATIOS AND ANALYSIS =====
+    # Comprehensive financial ratios for fundamental analysis
     
     def get_financial_ratios(self, symbol: str, period: str = "annual", limit: int = 50):
         """Get financial ratios (liquidity, profitability, leverage, etc.)"""
@@ -589,7 +608,8 @@ class fmp():
         url = f"https://financialmodelingprep.com/api/v4/owner_earnings?symbol={symbol}"
         return self.make_req(url)
     
-    # ===== VALUATION MODELS =====
+    # ===== VALUATION AND MODELING =====
+    # DCF models and various valuation methodologies
     
     def get_dcf_value(self, symbol: str):
         """Get discounted cash flow valuation"""
@@ -611,7 +631,8 @@ class fmp():
         url = f"https://financialmodelingprep.com/api/v4/advanced_levered_discounted_cash_flow?symbol={symbol}"
         return self.make_req(url)
     
-    # ===== EARNINGS & TRANSCRIPTS SECTION =====
+    # ===== EARNINGS DATA AND TRANSCRIPTS =====
+    # Earnings reports, call transcripts, and earnings-related information
     
     # Core Earnings Data
     def get_earnings_calendar(self, from_date: Optional[str] = None, to_date: Optional[str] = None):
@@ -7463,39 +7484,40 @@ class fmp():
             url += f"&to={to_date}"
         return self.make_req(url)
 
-# Initialize FMP with API key - you'll need to get your API key from financialmodelingprep.com
+# ===== FMP API INITIALIZATION =====
+# Financial Modeling Prep API configuration and authentication setup
 import os
-api_key = os.getenv('FMP_API_KEY', '{FMP_API_KEY}')  # Set your API key as environment variable or replace with actual key
+api_key = os.getenv('FMP_API_KEY', '{FMP_API_KEY}')  # Retrieve API key from environment or use placeholder
 
 def initialize_fmp_tools(api_key: str):
-    """Initialize FMP tools with the provided API key"""
+    """Dynamically create FMP tool registry with validation for agent integration"""
     fmp_instance = fmp(api_key)
-    
-    # Create list of FMP methods for the agent tools, excluding incomplete methods
+
+    # Build validated list of FMP API methods for AI agent toolchain
     tools = []
     for name in dir(fmp_instance):
-        if (callable(getattr(fmp_instance, name)) and 
-            not name.startswith('_') and 
+        if (callable(getattr(fmp_instance, name)) and
+            not name.startswith('_') and
             name not in ['api_key', 'make_req']):
-            
-            # Check if the method has a proper implementation
+
+            # Validate method implementation to ensure functional tools
             method = getattr(fmp_instance, name)
             try:
-                # Get the source code to check if it has actual implementation
+                # Inspect source code to confirm proper API implementation
                 import inspect
                 source = inspect.getsource(method)
-                # Check if method has return statement or actual implementation
-                if ('return self.make_req' in source or 
+                # Verify method contains actual API logic
+                if ('return self.make_req' in source or
                     'return ' in source or
                     'url =' in source):
                     tools.append(method)
             except (OSError, TypeError):
-                # If we can't get source (built-in methods), include them
+                # Include methods where source inspection fails (built-ins)
                 tools.append(method)
-    
+
     return tools
 
-# Initialize the FMP tools using the API key
+# Create FMP tool registry for AI agent integration
 fmp_tools = initialize_fmp_tools(api_key)
 
 # Enhanced Web Search Agent with native Google search capabilities
@@ -7875,15 +7897,20 @@ investment_banker_agent = Agent(
 )
 # Set root agent and run system
 root_agent = investment_banker_agent
+# ===== CHAT SESSION MANAGEMENT =====
+# In-memory storage for active chat sessions and conversation history
 history = {}
 session_service = InMemorySessionService()
+
 class AgentSession():
-    def __init__(self, agent,cid):
+    """Manages individual chat sessions with conversation state and AI agent interaction"""
+    def __init__(self, agent, cid):
         self.agent = agent
-        self.list = []
-        self.i=cid
+        self.list = []  # Conversation history
+        self.i = cid    # Chat session identifier
     
     async def initialize_session(self):
+        """Create new AI agent session with default configuration"""
         self.session = await session_service.create_session(
             app_name="NomiAi",
             user_id="user",
@@ -7892,37 +7919,42 @@ class AgentSession():
         return self.session
     
     async def process_input(self, msg):
+        """Process user message through AI agent and return response with conversation logging"""
         try:
-            # Ensure session is initialized
+            # Initialize session if not already created
             if not hasattr(self, 'session') or self.session is None:
                 await self.initialize_session()
-            
+
+            # Create agent runner for this conversation
             result = Runner(agent=self.agent, app_name="NomiAi", session_service=session_service)
-            
-            # Convert string message to Content object
+
+            # Convert user message to proper Content format for AI processing
             content = types.Content(role='user', parts=[types.Part(text=msg)])
-            
+
             response_events = []
             print(self.session.id)
+            # Stream AI agent response events
             async for event in result.run_async(
                 user_id="user",
                 session_id=self.session.id,
                 new_message=content
             ):
                 if hasattr(event, 'content') and event.content:
-                    # Extract text from Content object
+                    # Parse content parts from agent response
                     if hasattr(event.content, 'parts') and event.content.parts:
                         for part in event.content.parts:
-                            # Only process text parts, skip function_call and other non-text parts
+                            # Extract only text content, ignore function calls
                             if hasattr(part, 'text') and part.text is not None and part.text.strip():
                                 response_events.append(part.text)
                     else:
                         response_events.append(str(event.content))
-            
-            # Filter out None values before joining
+
+            # Compile valid response text
             valid_responses = [resp for resp in response_events if resp is not None]
             response = "\n".join(valid_responses) if valid_responses else "Nessuna risposta ricevuta"
             print(response)
+
+            # Log conversation exchange for session history
             self.list.append({
                 "user_message": msg,
                 "agent_response": response,
@@ -7931,41 +7963,50 @@ class AgentSession():
             return response
         except Exception as e:
             print(e)
+            # Retry with delay on failure
             await asyncio.sleep(5)
             return await self.process_input(msg)
     
     def dict(self):
         return self.list
 
+# ===== FLASK WEB APPLICATION =====
+# Web server setup for NomiAI chat interface
 app = Flask(__name__)
 
 async def send_msg(chat_id, msg):
+    """Route message to appropriate chat session and return AI agent response"""
+    # Create new session if this chat_id hasn't been seen before
     if chat_id not in history:
-        agent_session = AgentSession(agent=root_agent,cid=chat_id)
+        agent_session = AgentSession(agent=root_agent, cid=chat_id)
         await agent_session.initialize_session()
         history[chat_id] = agent_session
-    
-    jj = history[chat_id]
-    response = await jj.process_input(msg)
+
+    # Process message through existing session
+    session = history[chat_id]
+    response = await session.process_input(msg)
     print(f"Chat {chat_id}: {msg} -> {response}")
     return response
 
 @app.route('/')
 async def home():
+    """Serve main chat interface HTML page"""
     return render_template("index.html")
 
 @app.route('/chat', methods=['POST'])
 async def chat():
+    """Handle incoming chat messages and return AI agent responses"""
     try:
         data = request.get_json()
         if not data or 'message' not in data:
             return jsonify({"error": "Messaggio non fornito"}), 400
-        
+
         message = data['message']
         chat_id = data.get('chat_id', 'default')
-        
+
+        # Process message through AI agent
         response = await send_msg(chat_id, message)
-        
+
         return jsonify({
             "response": str(response),
             "chat_id": chat_id,
