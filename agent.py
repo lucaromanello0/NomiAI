@@ -7836,53 +7836,35 @@ risk_management_agent = Agent(
 
 # Portfolio Manager Agent - Orchestrates overall investment strategy by coordinating specialist insights
 investment_banker_agent = Agent(
-    name="Investment_Banker",
+    name="NomiAI_Financial_Assistant",
     model="gemini-2.5-flash-lite",
     planner=thinking_planner,
-    instruction="You are a senior investment banker with comprehensive expertise in financial markets, deal structuring, and strategic financial advisory. "
-    "Your role is to interrogate and coordinate insights from specialized analysts to provide sophisticated financial advice and investment banking services. "
-    "You work with: Enhanced Web Search for real-time market intelligence and news analysis, Market Research for sector analysis and opportunity identification, "
-    "Financial Analysis for valuation and due diligence, Technical Analysis for market timing and entry/exit strategies, ETF Specialist for passive investment structuring, "
-    "Earnings Specialist for earnings guidance and forecast validation, Institutional Flow Analyst for smart money positioning, "
-    "Insider Sentiment Analyst for market conviction signals, and Risk Management for comprehensive risk assessment. "
-    
-    "🌐 WEB INTELLIGENCE INTEGRATION: "
-    "Your Enhanced Web Search Agent provides critical real-time market intelligence including: breaking financial news and market-moving events, "
-    "regulatory announcements and policy changes, earnings call transcripts and management guidance, analyst report releases and rating changes, "
-    "merger & acquisition rumors and confirmations, economic data releases and central bank communications, "
-    "sector rotation trends and institutional positioning, and ESG developments and sustainability metrics. "
-    
-    "🧠 ORCHESTRATING AUTONOMOUS PROBLEM-SOLVING: "
-    "Your team of specialists are highly autonomous and resourceful analysts who NEVER give up when faced with incomplete data. "
-    "You should leverage their advanced problem-solving capabilities by: "
-    "- Instructing the Web Search Agent to find breaking news, regulatory changes, and real-time market developments "
-    "- Directing specialists to use ALL available calculation and estimation methods when direct data is missing "
-    "- Encouraging them to build comprehensive analysis from partial data using their specialized expertise "
-    "- Directing them to triangulate information from multiple sources and methodologies "
-    "- Asking them to construct missing metrics, indices, and benchmarks from available raw data "
-    "- Ensuring they explore every possible data source and calculation approach before concluding information is unavailable "
-    
-    "💡 CREATIVE SOLUTION COORDINATION: "
-    "When standard approaches face data limitations, coordinate your specialists to: "
-    "(1) Use web search to find alternative data sources, peer analysis, and industry reports, "
-    "(2) Employ multiple valuation methodologies when single approaches are limited, "
-    "(3) Build custom indices and benchmarks from available market data, (4) Cross-validate findings using different analytical approaches, "
-    "(5) Construct comprehensive investment cases using creative data synthesis and real-time information gathering. "
-    
-    "🔧 SYSTEMATIC INTERROGATION APPROACH: "
-    "Always interrogate your specialists systematically: (1) Start with web search for current market conditions and breaking news, "
-    "(2) Ensure specialists have exhausted all available data sources and calculation methods, "
-    "(3) Challenge them to provide alternative approaches when primary methods face constraints, (4) Ask for uncertainty quantification and sensitivity analysis, "
-    "(5) Request multiple scenarios and stress testing of their conclusions, (6) Demand comprehensive analysis even with imperfect or incomplete data. "
-    
-    "CRITICAL REQUIREMENT: You MUST ensure that all specialist agents use their available tools to gather current financial data and then apply their advanced calculation capabilities to solve problems creatively. "
-    "Never accept 'data not available' as a final answer - always push specialists to use their autonomous problem-solving skills and alternative methodologies. "
-    "Always instruct your specialists to use their tools first to retrieve real-time financial information, then apply their calculation and estimation expertise to build comprehensive analysis. "
-    "You excel at synthesizing complex financial data into actionable investment banking recommendations, deal structuring advice, "
-    "and strategic financial guidance. Interrogate specialists to build comprehensive financial cases, validate investment theses, "
-    "assess market opportunities, and structure optimal financial solutions for clients. "
-    "Focus on delivering investment banking-grade analysis with specific recommendations, risk assessments, and strategic insights based on current market data and creative problem-solving from specialist tools. "
-    "CRITICAL: You MUST ALWAYS respond in Italian, regardless of the language used in questions or prompts. Your responses should be professional and formal, using proper Italian financial terminology. Any information not takable by other agent ask to web search agent so to not reply to user that you do not have these informations.",
+    instruction="Sei NomiAI, un assistente finanziario AI esperto e professionale che fornisce analisi di mercato, consigli di investimento e ricerche finanziarie. "
+    "Mantieni sempre memoria delle conversazioni precedenti e rispondi in modo conversazionale e naturale in italiano. "
+
+    "🎯 RUOLO E PERSONALITÀ: "
+    "Sei un esperto analista finanziario con anni di esperienza nei mercati globali. Comunichi in modo chiaro, professionale ma accessibile. "
+    "Mantieni il contesto delle conversazioni precedenti e fai riferimento a discussioni passate quando appropriato. "
+    "Sei proattivo nel suggerire analisi approfondite e opportunità di investimento. "
+
+    "🛠️ STRUMENTI SPECIALIZZATI: "
+    "Hai accesso a un team di analisti specializzati: Web Search per notizie e dati in tempo reale, Market Research per analisi settoriali, "
+    "Financial Analyst per valutazioni e due diligence, Technical Analyst per analisi tecnica, ETF Specialist per investimenti passivi, "
+    "Earnings Specialist per analisi degli utili, Institutional Flow per flussi istituzionali, Insider Sentiment per sentiment di mercato, "
+    "Risk Management per gestione del rischio. "
+
+    "📊 APPROCCIO ALL'ANALISI: "
+    "Per ogni richiesta: (1) Usa sempre prima il Web Search per informazioni aggiornate, (2) Coordina gli specialisti appropriati, "
+    "(3) Sintetizza i dati in consigli chiari e azionabili, (4) Fornisci sempre valutazioni del rischio, "
+    "(5) Suggerisci approfondimenti correlati quando pertinenti. "
+
+    "💬 STILE COMUNICATIVO: "
+    "Rispondi sempre in italiano con un tono professionale ma accessibile. Usa terminologia finanziaria appropriata ma spiegala quando necessario. "
+    "Mantieni memoria del contesto conversazionale e fai riferimento a discussioni precedenti. "
+    "Se non hai informazioni specifiche, usa il Web Search Agent per trovarle - non dire mai di non avere informazioni senza aver cercato. "
+
+    "IMPORTANTE: Ricorda sempre il contesto delle conversazioni precedenti e costruisci su di esse. Sii conversazionale e naturale, "
+    "mantenendo alta qualità professionale nell'analisi finanziaria.",
     tools=[
         agent_tool.AgentTool(agent=enhanced_web_search_agent),  # Added enhanced web search agent
         agent_tool.AgentTool(agent=market_research_agent),
@@ -7908,6 +7890,7 @@ class AgentSession():
         self.agent = agent
         self.list = []  # Conversation history
         self.i = cid    # Chat session identifier
+        self.runner = None  # Persistent runner for conversation continuity
     
     async def initialize_session(self):
         """Create new AI agent session with default configuration"""
@@ -7918,23 +7901,37 @@ class AgentSession():
         )
         return self.session
     
-    async def process_input(self, msg):
+    async def process_input(self, msg, client_history=None):
         """Process user message through AI agent and return response with conversation logging"""
         try:
             # Initialize session if not already created
             if not hasattr(self, 'session') or self.session is None:
                 await self.initialize_session()
 
-            # Create agent runner for this conversation
-            result = Runner(agent=self.agent, app_name="NomiAi", session_service=session_service)
+            # Initialize runner if not exists to maintain conversation context
+            if not hasattr(self, 'runner') or self.runner is None:
+                self.runner = Runner(agent=self.agent, app_name="NomiAi", session_service=session_service)
+
+            # Build conversation context from history
+            context_msg = msg
+            if client_history and len(client_history) > 1:
+                # Include recent conversation context (last 6 messages for efficiency)
+                recent_history = client_history[-6:] if len(client_history) > 6 else client_history
+                context_parts = []
+                for hist in recent_history[:-1]:  # Exclude current message
+                    role = "Utente" if hist.get('role') == 'user' else "Assistente"
+                    context_parts.append(f"{role}: {hist.get('content', '')}")
+
+                if context_parts:
+                    context_msg = f"Contesto conversazione precedente:\n{chr(10).join(context_parts)}\n\nMessaggio corrente: {msg}"
 
             # Convert user message to proper Content format for AI processing
-            content = types.Content(role='user', parts=[types.Part(text=msg)])
+            content = types.Content(role='user', parts=[types.Part(text=context_msg)])
 
             response_events = []
-            print(self.session.id)
+            print(f"Session ID: {self.session.id}")
             # Stream AI agent response events
-            async for event in result.run_async(
+            async for event in self.runner.run_async(
                 user_id="user",
                 session_id=self.session.id,
                 new_message=content
@@ -7951,8 +7948,8 @@ class AgentSession():
 
             # Compile valid response text
             valid_responses = [resp for resp in response_events if resp is not None]
-            response = "\n".join(valid_responses) if valid_responses else "Nessuna risposta ricevuta"
-            print(response)
+            response = "\n".join(valid_responses) if valid_responses else "Mi dispiace, non sono riuscito a elaborare una risposta. Potresti riprovare?"
+            print(f"Response: {response}")
 
             # Log conversation exchange for session history
             self.list.append({
@@ -7962,10 +7959,9 @@ class AgentSession():
             })
             return response
         except Exception as e:
-            print(e)
-            # Retry with delay on failure
-            await asyncio.sleep(5)
-            return await self.process_input(msg)
+            print(f"Error in process_input: {e}")
+            # Return error message instead of infinite retry
+            return "Si è verificato un errore. Riprova tra qualche momento."
     
     def dict(self):
         return self.list
@@ -7974,7 +7970,7 @@ class AgentSession():
 # Web server setup for NomiAI chat interface
 app = Flask(__name__)
 
-async def send_msg(chat_id, msg):
+async def send_msg(chat_id, msg, client_history=None):
     """Route message to appropriate chat session and return AI agent response"""
     # Create new session if this chat_id hasn't been seen before
     if chat_id not in history:
@@ -7984,7 +7980,7 @@ async def send_msg(chat_id, msg):
 
     # Process message through existing session
     session = history[chat_id]
-    response = await session.process_input(msg)
+    response = await session.process_input(msg, client_history)
     print(f"Chat {chat_id}: {msg} -> {response}")
     return response
 
@@ -8003,9 +7999,10 @@ async def chat():
 
         message = data['message']
         chat_id = data.get('chat_id', 'default')
+        client_history = data.get('history', [])
 
-        # Process message through AI agent
-        response = await send_msg(chat_id, message)
+        # Process message through AI agent with history context
+        response = await send_msg(chat_id, message, client_history)
 
         return jsonify({
             "response": str(response),
